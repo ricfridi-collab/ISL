@@ -565,7 +565,7 @@
             checkCodeOnServer(inputCode, btn, msgEl);
         }
 
-        // دالة البحث
+        // دالة البحث والتحقق (تم التعديل لمنع الاستخدام المتكرر)
         function checkCodeOnServer(code, btn, msgEl) {
             const url = `${API_URL}/search?code=${encodeURIComponent(code)}`;
             
@@ -586,24 +586,18 @@
                         throw new Error("NotFound");
                     }
 
-                    // --- منطق التحقق ---
+                    // --- منطق التحقق (استخدام مرة واحدة فقط) ---
                     
-                    // الحالة 1: الكود جديد
+                    // الحالة 1: الكود جديد (غير مستخدم من قبل)
                     if (!entry.status || entry.status === "" || entry.status === null) {
-                        console.log("الكود جديد، جاري القفل على الجهاز...");
+                        console.log("الكود جديد، جاري القفل نهائياً على الجهاز...");
                         lockCodeToDevice(code, currentDeviceID, btn, msgEl);
                     } 
-                    // الحالة 2: الكود مستخدم
+                    // الحالة 2: الكود مستخدم مسبقاً (تم قفله)
                     else {
-                        if (entry.device_id === currentDeviceID) {
-                            console.log("الكود مفعل على هذا الجهاز.");
-                            saveToLocal(code);
-                            finishActivation(btn);
-                            grantAccess();
-                        } else {
-                            console.error("الكود مستخدم على جهاز آخر.");
-                            throw new Error("DifferentDevice");
-                        }
+                        // بما أن الطلب "مرة واحدة فقط"، أي كود له سابقة يرفض
+                        console.log("تم اكتشاف أن الكود مستخدم مسبقاً.");
+                        throw new Error("CodeUsed");
                     }
                 })
                 .catch(error => {
@@ -611,9 +605,9 @@
                     console.error("خطأ في التحقق:", error);
                     
                     if (error.message === "NotFound") {
-                        showFeedback(msgEl, "❌ الكود غير موجود! تأكد من الكتابة.", "var(--danger)");
-                    } else if (error.message === "DifferentDevice") {
-                        showFeedback(msgEl, "❌ هذا الكود مفعل مسبقاً على جهاز آخر!", "var(--danger)");
+                        showFeedback(msgEl, "❌ الكود غير موجود!", "var(--danger)");
+                    } else if (error.message === "CodeUsed") {
+                        showFeedback(msgEl, "❌ هذا الكود مستخدم بالفعل ولا يعمل مجدداً.", "var(--danger)");
                     } else if (error.message === "NetworkError") {
                         showFeedback(msgEl, "⚠️ فشل الاتصال بالإنترنت.", "var(--danger)");
                     } else {
@@ -622,7 +616,7 @@
                 });
         }
 
-        // دالة القفل
+        // دالة القفل (تحديث الحالة إلى locked)
         function lockCodeToDevice(code, deviceID, btn, msgEl) {
             // ملاحظة: تأكد من إعداد عمود 'code' كمفتاح أساسي في SheetDB
             const url = `${API_URL}/code/${code}`; 
@@ -634,7 +628,8 @@
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     data: { 
-                        "status": "active", 
+                        // نستخدم حالة "locked" لمنع إعادة الاستخدام نهائياً
+                        "status": "locked", 
                         "device_id": deviceID 
                     } 
                 })
